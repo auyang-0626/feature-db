@@ -1,0 +1,7 @@
+[workspace]
+
+members = [
+    "feature_kv",
+    "feature_meta",
+    "feature_common",
+]
