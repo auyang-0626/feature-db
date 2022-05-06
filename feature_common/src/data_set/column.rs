@@ -1,11 +1,15 @@
 use serde_json::Value;
+use serde::{Deserialize, Serialize};
 
 /// 字段类型
+#[derive(Serialize, Deserialize,Debug)]
 pub enum ColumnType {
     // 文本
     TEXT,
-    // 数字
-    NUMBER,
+    // 数字-整形
+    INT,
+    // 数字-浮点
+    FLOAT,
     // 时间
     DATETIME,
 }
