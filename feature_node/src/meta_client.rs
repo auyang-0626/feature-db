@@ -1,6 +1,7 @@
-use feature_common::data_set::DataSet;
+
 use serde_json::Value;
-use feature_common::BoxResult;
+use feature_base::custom_error::BoxResult;
+use feature_base::ds::DataSet;
 
 pub fn fetch_all_dataset() -> BoxResult<Vec<DataSet>> {
     let data = r#"
@@ -9,7 +10,7 @@ pub fn fetch_all_dataset() -> BoxResult<Vec<DataSet>> {
         "id":101,
         "name":"ds_user_order",
         "desc":"用户订单数据集",
-        "attrs":{
+        "columns":{
           "user_id":"INT",
           "amount":"FLOAT",
           "ts":"DATETIME"

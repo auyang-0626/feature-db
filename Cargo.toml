@@ -1,7 +1,7 @@
 [workspace]
 
 members = [
-    "feature_kv",
+    "feature_base",
+    "feature_node",
     "feature_meta",
-    "feature_common",
 ]
