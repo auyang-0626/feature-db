@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use log::info;
 use serde::{Deserialize, Serialize};
@@ -14,7 +15,7 @@ use crate::meta_client;
 
 pub struct Node {
     pub config: Config,
-    pub datasets: HashMap<i64, DataSet>,
+    pub datasets: HashMap<i64, Arc<DataSet>>,
     pub redo_log: RedoLog,
 }
 
@@ -22,12 +23,16 @@ const KEY_DS: &str = "ds";
 
 
 impl Node {
-    async fn update(&self, data: &Value) -> BoxResult<DsUpdateResult> {
-        let ds_value = get_value_as_int(data, KEY_DS)?;
+    async fn update(&self, data: Value) -> BoxResult<DsUpdateResult> {
+        let ds_value = get_value_as_int(&data, KEY_DS)?;
         info!("ds_value:{}", ds_value);
+
         let ds = self.datasets.get(&ds_value)
-            .ok_or(common_err(format!("找不到对应的ds:{}", ds_value)))?;
-        ds.update(data).await
+            .ok_or(common_err(format!("找不到对应的ds:{}", ds_value)))?.clone();
+        let send = self.redo_log.send.clone();
+        tokio::spawn(async move {
+            ds.update(&data, send).await
+        }).await.map_err(|e| -> BoxErr{ e.into() })?
     }
 }
 
@@ -35,7 +40,7 @@ pub async fn create_and_init() -> BoxResult<Node> {
     let ds_vec = meta_client::fetch_all_dataset().expect("创建node失败");
     let mut datasets = HashMap::new();
     for ds in ds_vec {
-        datasets.insert(ds.id, ds);
+        datasets.insert(ds.id, Arc::new(ds));
     }
 
     let config = Config {
@@ -68,16 +73,14 @@ mod tests {
 
 
             let data = r#"
-        {
-            "ds":101,
-            "user_id": 123422,
-            "amount": 43,
-            "ts": 1651134356123
-        }"#;
-            tokio::spawn(async move {
-                let v: Value = serde_json::from_str(data).expect("xxx");
-                info!("write result:{:?}", node.update(&v).await);
-            }).await;
+            {
+                "ds":101,
+                "user_id": 123422,
+                "amount": 43,
+                "ts": 1651134356123
+            }"#;
+            let v: Value = serde_json::from_str(data).expect("xxx");
+            info!("write result:{:?}", node.update(v).await);
         });
     }
 }
