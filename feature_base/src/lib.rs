@@ -5,6 +5,7 @@ pub mod custom_error;
 pub mod feature;
 pub mod ds;
 pub mod store;
+pub mod config;
 
 /// 时间单位
 #[derive(Serialize, Deserialize,Debug)]

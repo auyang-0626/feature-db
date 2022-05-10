@@ -7,6 +7,7 @@ use column::ColumnType;
 
 use crate::custom_error::BoxResult;
 use crate::feature::Feature;
+use crate::store::generate_tid;
 
 pub mod column;
 
@@ -49,9 +50,10 @@ pub struct DsUpdateResult {
 
 
 impl DataSet {
-    pub fn update(&self, data: &Value) -> BoxResult<DsUpdateResult> {
+    pub async fn update(&self, data: &Value) -> BoxResult<DsUpdateResult>{
         let mut result_map = HashMap::new();
 
+        let tid = generate_tid();
         for feature in &self.features {
             if let Err(e) = feature.check_update_condition(data, &self.columns) {
                 result_map.insert(feature.id, FeatureUpdateResult::failed(format!("{}", e)));
