@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::custom_error::{BoxResult, value_not_found_err, value_type_not_match_err};
-use log::{info};
 
 /// 字段类型
 #[derive(Serialize, Deserialize, Debug)]

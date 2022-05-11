@@ -1,16 +1,14 @@
-use std::error::Error;
-use std::path::Path;
+
 
 use tokio::fs::{File, OpenOptions};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 use tokio::sync::mpsc::{Receiver, Sender};
 
-use crate::config::Config;
 use crate::custom_error::{BoxErr, BoxResult};
 
 pub struct RedoLog {
     pub log_file: File,
-    pub send: Sender<String>,
+    pub send: Sender<RedoLogItem>,
 }
 
 impl RedoLog {
@@ -23,12 +21,10 @@ impl RedoLog {
             .await
             .map_err(|e| -> BoxErr { e.into() })?;
 
-        let (tx, mut rx): (Sender<String>, Receiver<String>) = mpsc::channel(10000);
+        let (tx, rx): (Sender<RedoLogItem>, Receiver<RedoLogItem>) = mpsc::channel(10000);
 
         tokio::spawn(async move {
-            while let Some(message) = rx.recv().await {
-                println!("GOT = {}", message);
-            }
+            consumer_and_store_log(rx).await;
         });
 
 
@@ -47,7 +43,41 @@ pub enum RedoLogKind {
     End,
 }
 
-pub async fn send_tx_begin_log(send: &Sender<String>, tid: u64) ->BoxResult<()> {
-    send.send(format!("{:?},{}\n", RedoLogKind::Begin, tid))
-        .await.map_err(|e|e.into())
+#[derive(Debug)]
+pub struct RedoLogItem {
+    pub tid: u64,
+    pub kind: RedoLogKind,
+    pub lid: Option<u64>,
+    pub value: Option<String>,
+}
+
+impl RedoLogItem {
+    pub fn new_begin_log_item(tid: u64) -> RedoLogItem {
+        RedoLogItem {
+            tid,
+            kind: RedoLogKind::Begin,
+            lid: None,
+            value: None,
+        }
+    }
+}
+
+lazy_static! {
+    static ref REDO_LOCK: Mutex<u64> = Mutex::new(0);
+}
+
+
+pub async fn send_log(send: &Sender<RedoLogItem>, mut item: RedoLogItem) -> BoxResult<u64> {
+    let mut log_num = REDO_LOCK.lock().await;
+    *log_num += 1;
+    item.lid = Some(*log_num);
+    send.send(item)
+        .await.map_err(|e| -> BoxErr { e.into() });
+    Ok(*log_num)
+}
+
+pub async fn consumer_and_store_log(mut rx: Receiver<RedoLogItem>) {
+    while let Some(message) = rx.recv().await {
+        println!("GOT = {:?}", message);
+    }
 }
