@@ -6,10 +6,7 @@ use tokio::sync::mpsc::Sender;
 
 use column::ColumnType;
 
-use crate::custom_error::BoxResult;
 use crate::feature::Feature;
-use crate::store::generate_tid;
-use crate::store::redo_log::{ send_log, RedoLogItem};
 
 pub mod column;
 
@@ -50,22 +47,3 @@ pub struct DsUpdateResult {
     pub feature_result_map: HashMap<i64, FeatureUpdateResult>,
 }
 
-
-impl DataSet {
-    pub async fn update(&self, data: &Value, send: Sender<RedoLogItem>) -> BoxResult<DsUpdateResult> {
-        let mut result_map = HashMap::new();
-
-        let tid = generate_tid();
-        let lid = send_log(&send,RedoLogItem::new_begin_log_item(tid)).await?;
-
-
-        for feature in &self.features {
-            if let Err(e) = feature.check_update_condition(data, &self.columns) {
-                result_map.insert(feature.id, FeatureUpdateResult::failed(format!("{}", e)));
-                continue;
-            }
-            //feature.update(data, &self.columns);
-        }
-        Ok(DsUpdateResult { id: self.id, feature_result_map: result_map })
-    }
-}
