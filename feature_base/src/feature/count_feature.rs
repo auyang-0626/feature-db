@@ -7,10 +7,10 @@ use string_builder::Builder;
 
 use crate::custom_error::{BoxErr, BoxResult, column_not_found_in_ds_err};
 use crate::ds::column::{ColumnType, get_value_as_u64, get_value_to_str};
-use crate::feature::value::{SumStoreValue, StoreValue};
 use crate::store::Store;
 use crate::store::wal::Wal;
 use crate::WindowUnit;
+use crate::feature::value::FeatureValue;
 
 /// 累加类型的指标模板
 #[derive(Serialize, Deserialize, Debug)]
@@ -48,14 +48,14 @@ impl CountFeatureTemplate {
         //
         match store.get(&key) {
             None => {
-                let mut sv = SumStoreValue::new();
-                sv.add(time, self.window_unit.to_millis(self.window_size), 1);
-
+                let mut sv = FeatureValue::new();
+                sv.add_int(time, self.window_unit.to_millis(self.window_size), 1);
+                store.put(key,sv);
             }
             Some( sv) => {
 
                 let mut locked_sv = sv.lock().await;
-                locked_sv.add(time, self.window_unit.to_millis(self.window_size), 1);
+                locked_sv.add_int(time, self.window_unit.to_millis(self.window_size), 1);
 
             }
         };
