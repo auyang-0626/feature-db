@@ -2,14 +2,17 @@ use std::collections::{BTreeMap, HashMap};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::io::Bytes;
-use std::sync::Arc;
+use std::sync::{Arc};
 
 use bitmaps::Bitmap;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 
+use crate::calc_hash;
+use crate::custom_error::{BoxResult, common_err};
 use crate::feature::value::FeatureValue;
 use crate::store::page::Page;
-use crate::store::slot::{calc_slot_id, Slot, SLOT_BIT_LEB, SLOT_NUM};
+use crate::store::slot::{Slot, SLOT_NUM_BY_BIT};
+use log::{info};
 
 pub mod wal;
 pub mod page;
@@ -31,30 +34,26 @@ pub struct Store {
 
 
 impl Store {
-    pub fn new(data_dir: String) -> Store {
-
-        let mut  slot_index = HashMap::new();
-        for i in 2^12 {
-            slot_index.insert(i,Slot::new())
+    pub async fn new(data_dir: String) -> Store {
+        let mut slot_index = HashMap::new();
+        for i in 0..1 << SLOT_NUM_BY_BIT {
+            slot_index.insert(i, Slot::new(i).await);
         }
-
         Store {
             data_dir,
             slot_index,
         }
     }
 
-    pub fn get(&self, key: &String) -> Option<Arc<Mutex<FeatureValue>>> {
-        let slot_id = calc_slot_id(key);
-        let slot = self.slot_index.get(&slot_id)?;
-
-        slot.get(key)
+    /// 计算slot的值
+    pub fn get_slot(&self, key_hash: u64) -> BoxResult<&Slot> {
+        let slot_id = (key_hash >> (64 - SLOT_NUM_BY_BIT)) as u16;
+        self.slot_index.get(&slot_id).ok_or(common_err(format!("获取slot失败！")))
     }
 
-    pub fn put(&self, key: String,value:FeatureValue){
-        let slot_id = calc_slot_id(&key);
-        let slot = self.slot_index.get(&slot_id)?;
-        slot.put(key,value);
+    pub fn get_page(&self,key_hash: u64) -> BoxResult<(u64,Arc<RwLock<Page>>)> {
+        let slot = self.get_slot(key_hash)?;
+        slot.get_page(key_hash)
     }
 }
 

@@ -19,7 +19,7 @@ pub struct DataSet {
     // 描述
     pub desc: String,
     // 属性
-    pub columns: HashMap<String, ColumnType>,
+    pub column_type_map: HashMap<String, ColumnType>,
     // 指标
     pub features: Vec<Feature>,
 }
@@ -44,6 +44,6 @@ impl FeatureUpdateResult {
 #[derive(Debug)]
 pub struct DsUpdateResult {
     pub id: i64,
-    pub feature_result_map: HashMap<i64, FeatureUpdateResult>,
+    pub feature_result_map: HashMap<u64, FeatureUpdateResult>,
 }
 

@@ -9,6 +9,9 @@ use crate::feature::count_feature::CountFeatureTemplate;
 use crate::store::Store;
 use crate::store::wal::Wal;
 use crate::feature::FeatureTemplate::COUNT;
+use crate::feature::value::FeatureValue;
+use crate::store::page::Page;
+use tokio::sync::RwLockWriteGuard;
 
 pub mod count_feature;
 pub mod value;
@@ -27,10 +30,20 @@ pub struct Feature {
 }
 
 impl Feature {
-    pub async fn calc(&self, data: &Value, columns: &HashMap<String, ColumnType>,
-                wal: &Wal, store: &Store) -> BoxResult<()> {
+
+    pub fn build_key(&self, event: &Value, column_type_map: &HashMap<String, ColumnType>) -> BoxResult<String>{
         match &self.template {
-            COUNT(cf) => cf.calc(data, self.id, columns, wal, store).await
+            COUNT(cf) => cf.build_key(event, self.id, column_type_map)
+        }
+    }
+
+    pub async fn calc_and_update(&self, event: &Value,
+                                 column_type_map: &HashMap<String, ColumnType>,
+                                 key:&String,
+                                 page:&mut RwLockWriteGuard<'_,Page>,
+                                 wal: &Wal) -> BoxResult<()> {
+        match &self.template {
+            COUNT(cf) => cf.calc_and_update(event, column_type_map,key, page, wal).await
         }
     }
 }

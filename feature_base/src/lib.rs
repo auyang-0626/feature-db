@@ -1,6 +1,9 @@
 #[macro_use]
 extern crate lazy_static;
 
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+
 use serde::{Deserialize, Serialize};
 
 pub mod custom_error;
@@ -33,6 +36,12 @@ pub fn init_log() {
     env_logger::init();
 }
 
+/// 计算hash
+pub fn calc_hash(key: &String) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    key.hash(&mut hasher);
+    hasher.finish()
+}
 
 #[cfg(test)]
 mod tests {

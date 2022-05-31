@@ -10,7 +10,7 @@ pub fn fetch_all_dataset() -> BoxResult<Vec<DataSet>> {
         "id":101,
         "name":"ds_user_order",
         "desc":"用户订单数据集",
-        "columns":{
+        "column_type_map":{
           "user_id":"INT",
           "amount":"FLOAT",
           "ts":"DATETIME"

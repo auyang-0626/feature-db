@@ -29,42 +29,42 @@ pub fn get_value_as_u64(data: &Value, column: &str) -> BoxResult<u64> {
         .as_u64().ok_or(value_type_not_match_err(&data, column))
 }
 
-pub fn get_value_to_str(data: &Value, column: &str, column_type: &ColumnType) -> BoxResult<String> {
-    let value = data.get(column)
-        .ok_or(value_not_found_err(&data, column))?;
+pub fn get_value_to_str(event: &Value, column: &str, column_type: &ColumnType) -> BoxResult<String> {
+    let value = event.get(column)
+        .ok_or(value_not_found_err(&event, column))?;
     let value = match column_type {
         ColumnType::TEXT => {
-            value.as_str().ok_or(value_type_not_match_err(&data, column))?.to_string()
+            value.as_str().ok_or(value_type_not_match_err(&event, column))?.to_string()
         }
         ColumnType::INT => {
-            value.as_i64().ok_or(value_type_not_match_err(&data, column))?.to_string()
+            value.as_i64().ok_or(value_type_not_match_err(&event, column))?.to_string()
         }
         ColumnType::FLOAT => {
-            value.as_f64().ok_or(value_type_not_match_err(&data, column))?.to_string()
+            value.as_f64().ok_or(value_type_not_match_err(&event, column))?.to_string()
         }
         ColumnType::DATETIME => {
-            value.as_u64().ok_or(value_type_not_match_err(&data, column))?.to_string()
+            value.as_u64().ok_or(value_type_not_match_err(&event, column))?.to_string()
         }
     };
 
     Ok(value)
 }
 
-pub fn check_value_and_type_match(data: &Value, column: &str, column_type: &ColumnType) -> BoxResult<()> {
-    let value = data.get(column)
-        .ok_or(value_not_found_err(&data, column))?;
+pub fn check_value_and_type_match(event: &Value, column: &str, column_type: &ColumnType) -> BoxResult<()> {
+    let value = event.get(column)
+        .ok_or(value_not_found_err(&event, column))?;
     match column_type {
         ColumnType::TEXT => {
-            value.as_str().ok_or(value_type_not_match_err(&data, column))?;
+            value.as_str().ok_or(value_type_not_match_err(&event, column))?;
         }
         ColumnType::INT => {
-            value.as_i64().ok_or(value_type_not_match_err(&data, column))?;
+            value.as_i64().ok_or(value_type_not_match_err(&event, column))?;
         }
         ColumnType::FLOAT => {
-            value.as_f64().ok_or(value_type_not_match_err(&data, column))?;
+            value.as_f64().ok_or(value_type_not_match_err(&event, column))?;
         }
         ColumnType::DATETIME => {
-            value.as_i64().ok_or(value_type_not_match_err(&data, column))?;
+            value.as_i64().ok_or(value_type_not_match_err(&event, column))?;
         }
     };
 
