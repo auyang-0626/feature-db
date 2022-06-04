@@ -1,11 +1,22 @@
 use std::collections::BTreeMap;
 use std::cell::RefCell;
+use serde::{Serialize, Serializer};
 
 #[derive(Debug)]
 pub enum ValueKind {
     INT(u64),
     FLOAT(f64),
 }
+
+impl Serialize for ValueKind{
+    fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error> where
+        S: Serializer {
+        serializer.serialize_i32()
+        todo!()
+    }
+}
+
+
 
 #[derive(Debug)]
 pub struct FeatureValue(BTreeMap<u64, ValueKind>);

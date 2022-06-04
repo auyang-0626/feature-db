@@ -9,13 +9,15 @@ use crate::feature::value::FeatureValue;
 /// 页
 #[derive(Debug)]
 pub struct Page {
+    pub slot_id: u16,
     pub id: usize,
     pub data: BTreeMap<String, FeatureValue>,
 }
 
 impl Page {
-    pub fn new(id: usize) -> Page {
+    pub fn new(slot_id: u16, id: usize) -> Page {
         Page {
+            slot_id,
             id,
             data: BTreeMap::new(),
         }

@@ -49,7 +49,7 @@ impl Node {
         let mut feature_mk_map = HashMap::new();
         for (key, _) in &key_feature_map {
             let hash = calc_hash(&key);
-            let (mk, page) = self.store.get_page(hash)?;
+            let (mk, page) = self.store.get_page(hash).await?;
             locks.push((mk, page));
             feature_mk_map.insert(key, mk);
         }
