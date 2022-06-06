@@ -4,15 +4,15 @@ use log::info;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use string_builder::Builder;
+use tokio::sync::RwLockWriteGuard;
 
 use crate::custom_error::{BoxErr, BoxResult, column_not_found_in_ds_err};
 use crate::ds::column::{ColumnType, get_value_as_u64, get_value_to_str};
 use crate::feature::value::FeatureValue;
-use crate::store::Store;
+use crate::store::{Storable, Store};
+use crate::store::page::Page;
 use crate::store::wal::Wal;
 use crate::WindowUnit;
-use tokio::sync::RwLockWriteGuard;
-use crate::store::page::Page;
 
 /// 累加类型的指标模板
 #[derive(Serialize, Deserialize, Debug)]
@@ -46,27 +46,31 @@ impl CountFeatureTemplate {
 
     pub async fn calc_and_update<'a>(&self, event: &Value,
                                      column_type_map: &HashMap<String, ColumnType>,
-                                     key:&String,
-                                     page:&mut RwLockWriteGuard<'_,Page>,
+                                     key: &String,
+                                     page: &mut RwLockWriteGuard<'_, Page>,
                                      wal: &Wal) -> BoxResult<()> {
 
         // 事件时间
         let time = get_value_as_u64(event, &self.time_key)?;
 
         let old_value = page.get(key).await;
-        info!("old_value:{:?}",old_value);
+        info!("old_value:{:?}", old_value);
         //
-        match old_value {
+        let changed_size = match old_value {
             None => {
                 let mut sv = FeatureValue::new();
                 sv.add_int(time, self.window_unit.to_millis(self.window_size), 1);
+                let size = sv.need_space();
                 page.put(key.clone(), sv).await;
+                key.len() as i32 + size as i32
             }
             Some(sv) => {
+                let before_size = sv.need_space() as i32;
                 sv.add_int(time, self.window_unit.to_millis(self.window_size), 1);
+                sv.need_space() as i32 - before_size
             }
         };
-
+        page.after_update(changed_size);
         Ok(())
     }
 }
