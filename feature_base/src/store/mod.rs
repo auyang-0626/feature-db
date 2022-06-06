@@ -5,6 +5,7 @@ use std::io::Bytes;
 use std::sync::Arc;
 
 use bitmaps::Bitmap;
+use bytebuffer::ByteBuffer;
 use log::info;
 use tokio::sync::{Mutex, RwLock};
 
@@ -60,3 +61,14 @@ impl Store {
     }
 }
 
+/// 可存储的接口定义
+pub trait Storable {
+    /// 转为字节
+    fn encode(&self, buf: &mut ByteBuffer);
+
+    /// 从字节中实例化
+    fn decode(buf: &mut ByteBuffer) -> BoxResult<Self> where Self: Sized;
+
+    /// 需要的字节大小
+    fn need_space(&self) -> usize;
+}

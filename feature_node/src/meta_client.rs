@@ -32,6 +32,5 @@ pub fn fetch_all_dataset() -> BoxResult<Vec<DataSet>> {
      }
     ]
         "#;
-
     serde_json::from_str(data).map_err(|e|e.into())
 }
