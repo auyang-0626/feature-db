@@ -5,15 +5,16 @@ use std::io::Bytes;
 use std::sync::Arc;
 
 use bitmaps::Bitmap;
-use bytebuffer::ByteBuffer;
 use log::info;
 use tokio::sync::{Mutex, RwLock};
+use tokio::time;
 
 use crate::calc_hash;
 use crate::custom_error::{BoxResult, common_err};
 use crate::feature::value::FeatureValue;
 use crate::store::page::Page;
 use crate::store::slot::{Slot, SLOT_NUM_BY_BIT};
+use bytes::BytesMut;
 
 pub mod wal;
 pub mod page;
@@ -64,10 +65,10 @@ impl Store {
 /// 可存储的接口定义
 pub trait Storable {
     /// 转为字节
-    fn encode(&self, buf: &mut ByteBuffer);
+    fn encode(&self, buf: &mut BytesMut) -> BoxResult<()>;
 
     /// 从字节中实例化
-    fn decode(buf: &mut ByteBuffer) -> BoxResult<Self> where Self: Sized;
+    fn decode(buf: &mut BytesMut) -> BoxResult<Self> where Self: Sized;
 
     /// 需要的字节大小
     fn need_space(&self) -> usize;

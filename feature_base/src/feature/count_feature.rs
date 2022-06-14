@@ -11,7 +11,7 @@ use crate::ds::column::{ColumnType, get_value_as_u64, get_value_to_str};
 use crate::feature::value::FeatureValue;
 use crate::store::{Storable, Store};
 use crate::store::page::Page;
-use crate::store::wal::Wal;
+use crate::store::wal::{Wal, WalFeatureUpdateValue};
 use crate::WindowUnit;
 
 /// 累加类型的指标模板
@@ -48,7 +48,7 @@ impl CountFeatureTemplate {
                                      column_type_map: &HashMap<String, ColumnType>,
                                      key: &String,
                                      page: &mut RwLockWriteGuard<'_, Page>,
-                                     wal: &Wal) -> BoxResult<()> {
+                                     wal: &Wal) -> BoxResult<WalFeatureUpdateValue> {
 
         // 事件时间
         let time = get_value_as_u64(event, &self.time_key)?;
@@ -56,21 +56,17 @@ impl CountFeatureTemplate {
         let old_value = page.get(key).await;
         info!("old_value:{:?}", old_value);
         //
-        let changed_size = match old_value {
+        let update_res = match old_value {
             None => {
                 let mut sv = FeatureValue::new();
-                sv.add_int(time, self.window_unit.to_millis(self.window_size), 1);
-                let size = sv.need_space();
+                let update_res = sv.add_int(time, self.window_unit.to_millis(self.window_size), 1)?;
                 page.put(key.clone(), sv).await;
-                key.len() as i32 + size as i32
+                update_res
             }
             Some(sv) => {
-                let before_size = sv.need_space() as i32;
-                sv.add_int(time, self.window_unit.to_millis(self.window_size), 1);
-                sv.need_space() as i32 - before_size
+                sv.add_int(time, self.window_unit.to_millis(self.window_size), 1)?
             }
         };
-        page.after_update(changed_size);
-        Ok(())
+        Ok(update_res)
     }
 }

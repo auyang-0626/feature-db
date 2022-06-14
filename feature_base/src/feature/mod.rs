@@ -7,7 +7,7 @@ use crate::custom_error::{BoxResult, column_not_found_in_ds_err};
 use crate::ds::column::{check_value_and_type_match, ColumnType};
 use crate::feature::count_feature::CountFeatureTemplate;
 use crate::store::Store;
-use crate::store::wal::Wal;
+use crate::store::wal::{Wal, WalFeatureUpdateValue};
 use crate::feature::FeatureTemplate::COUNT;
 use crate::feature::value::FeatureValue;
 use crate::store::page::Page;
@@ -41,7 +41,7 @@ impl Feature {
                                  column_type_map: &HashMap<String, ColumnType>,
                                  key:&String,
                                  page:&mut RwLockWriteGuard<'_,Page>,
-                                 wal: &Wal) -> BoxResult<()> {
+                                 wal: &Wal) -> BoxResult<WalFeatureUpdateValue> {
         match &self.template {
             COUNT(cf) => cf.calc_and_update(event, column_type_map,key, page, wal).await
         }

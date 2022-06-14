@@ -50,3 +50,10 @@ pub fn column_not_found_in_ds_err(key: &str) -> BoxErr {
         message: format!("数据集中没有对应的key:{}", key),
     }.into()
 }
+
+pub fn decode_failed_by_insufficient_data_err() -> BoxErr {
+    CustomError {
+        code: 20001,
+        message: format!("解析失败，数据长度不足"),
+    }.into()
+}
