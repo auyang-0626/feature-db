@@ -4,7 +4,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, RwLock};
 
-use crate::custom_error::{BoxErr, BoxResult, common_err};
+use crate::custom_error::{common_err, CustomResult, CustomError};
 use crate::feature::value::FeatureValue;
 use crate::store::Storable;
 use bytes::{BytesMut, BufMut, Buf};
@@ -32,7 +32,7 @@ impl Page {
     pub async fn get(&self, key: &String) -> Option<&FeatureValue> {
         self.data.get(key)
     }
-    pub async fn put(&mut self, key: String, value: FeatureValue) -> BoxResult<()> {
+    pub async fn put(&mut self, key: String, value: FeatureValue) -> CustomResult<()> {
         self.data.insert(key, value);
         Ok(())
     }
@@ -44,7 +44,7 @@ impl Page {
 }
 
 impl Storable for Page {
-    fn encode(&self, buf: &mut BytesMut) ->BoxResult<()>{
+    fn encode(&self, buf: &mut BytesMut) ->CustomResult<()>{
         buf.put_u16(self.slot_id);
         buf.put_u64(self.id as u64);
         for (k, v) in &self.data {
@@ -55,7 +55,7 @@ impl Storable for Page {
         Ok(())
     }
 
-    fn decode(buf: &mut BytesMut) -> BoxResult<Self> where Self: Sized {
+    fn decode(buf: &mut BytesMut) -> CustomResult<Self> where Self: Sized {
         if buf.len() < 10 {
             return Err(common_err(format!("page数据格式非法，解析失败！")));
         }
@@ -67,8 +67,7 @@ impl Storable for Page {
             let key_len = buf.get_u16();
 
             let bytes = buf.split_to(key_len as usize);
-            let key = String::from_utf8(bytes.to_vec())
-                .map_err(|e| -> BoxErr { e.into() })?;
+            let key = String::from_utf8(bytes.to_vec())?;
 
             let value = FeatureValue::decode(buf)?;
             page.data.insert(key, value);

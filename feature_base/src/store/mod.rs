@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use std::io::Bytes;
+use std::io::{Bytes};
 use std::sync::Arc;
 
 use bitmaps::Bitmap;
@@ -10,7 +10,7 @@ use tokio::sync::{Mutex, RwLock};
 use tokio::time;
 
 use crate::calc_hash;
-use crate::custom_error::{BoxResult, common_err};
+use crate::custom_error::{common_err, CustomResult};
 use crate::feature::value::FeatureValue;
 use crate::store::page::Page;
 use crate::store::slot::{Slot, SLOT_NUM_BY_BIT};
@@ -51,12 +51,12 @@ impl Store {
     }
 
     /// 计算slot的值
-    pub fn get_slot(&self, key_hash: u64) -> BoxResult<&Slot> {
+    pub fn get_slot(&self, key_hash: u64) -> CustomResult<&Slot> {
         let slot_id = (key_hash >> (64 - SLOT_NUM_BY_BIT)) as u16;
         self.slot_index.get(&slot_id).ok_or(common_err(format!("获取slot失败！")))
     }
 
-    pub async fn get_page(&self, key_hash: u64) -> BoxResult<(u64, Arc<RwLock<Page>>)> {
+    pub async fn get_page(&self, key_hash: u64) -> CustomResult<(u64, Arc<RwLock<Page>>)> {
         let slot = self.get_slot(key_hash)?;
         slot.get_page(key_hash).await
     }
@@ -65,10 +65,10 @@ impl Store {
 /// 可存储的接口定义
 pub trait Storable {
     /// 转为字节
-    fn encode(&self, buf: &mut BytesMut) -> BoxResult<()>;
+    fn encode(&self, buf: &mut BytesMut) -> CustomResult<()>;
 
     /// 从字节中实例化
-    fn decode(buf: &mut BytesMut) -> BoxResult<Self> where Self: Sized;
+    fn decode(buf: &mut BytesMut) -> CustomResult<Self> where Self: Sized;
 
     /// 需要的字节大小
     fn need_space(&self) -> usize;

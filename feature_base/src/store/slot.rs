@@ -6,7 +6,7 @@ use std::sync::Arc;
 use bitmaps::Bitmap;
 use tokio::sync::{Mutex, RwLock};
 
-use crate::custom_error::{BoxResult, common_err};
+use crate::custom_error::{common_err, CustomResult};
 use crate::feature::value::FeatureValue;
 use crate::store::page::Page;
 use crate::store::wal::Wal;
@@ -39,7 +39,7 @@ impl Slot {
     }
 
     /// 创建新的page,不插入索引树中
-    pub async fn new_page(&self) -> BoxResult<Page> {
+    pub async fn new_page(&self) -> CustomResult<Page> {
         /// 申请新的page id
         let mut bitmap = self.page_bit_map.lock().await;
         let page_id = bitmap.first_false_index().ok_or(common_err(format!("分配page失败！")))?;
@@ -49,7 +49,7 @@ impl Slot {
         Ok(next_page)
     }
 
-    pub async fn get_page(&self, key_hash: u64) -> BoxResult<(u64, Arc<RwLock<Page>>)> {
+    pub async fn get_page(&self, key_hash: u64) -> CustomResult<(u64, Arc<RwLock<Page>>)> {
         let page_tree = self.page_tree.read().await;
         let (mk, page) = page_tree.range(..key_hash).last()
             .ok_or(common_err(format!("找不到对应的page:{}", key_hash)))?;

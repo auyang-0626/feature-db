@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::custom_error::{BoxResult, value_not_found_err, value_type_not_match_err};
+use crate::custom_error::{value_not_found_err, value_type_not_match_err, CustomResult};
 
 /// 字段类型
 #[derive(Serialize, Deserialize, Debug)]
@@ -17,19 +17,19 @@ pub enum ColumnType {
 }
 
 
-pub fn get_value_as_int(data: &Value, column: &str) -> BoxResult<i64> {
+pub fn get_value_as_int(data: &Value, column: &str) -> CustomResult<i64> {
     data.get(column)
         .ok_or(value_not_found_err(&data, column))?
         .as_i64().ok_or(value_type_not_match_err(&data, column))
 }
 
-pub fn get_value_as_u64(data: &Value, column: &str) -> BoxResult<u64> {
+pub fn get_value_as_u64(data: &Value, column: &str) -> CustomResult<u64> {
     data.get(column)
         .ok_or(value_not_found_err(&data, column))?
         .as_u64().ok_or(value_type_not_match_err(&data, column))
 }
 
-pub fn get_value_to_str(event: &Value, column: &str, column_type: &ColumnType) -> BoxResult<String> {
+pub fn get_value_to_str(event: &Value, column: &str, column_type: &ColumnType) -> CustomResult<String> {
     let value = event.get(column)
         .ok_or(value_not_found_err(&event, column))?;
     let value = match column_type {
@@ -50,7 +50,7 @@ pub fn get_value_to_str(event: &Value, column: &str, column_type: &ColumnType) -
     Ok(value)
 }
 
-pub fn check_value_and_type_match(event: &Value, column: &str, column_type: &ColumnType) -> BoxResult<()> {
+pub fn check_value_and_type_match(event: &Value, column: &str, column_type: &ColumnType) -> CustomResult<()> {
     let value = event.get(column)
         .ok_or(value_not_found_err(&event, column))?;
     match column_type {

@@ -12,7 +12,7 @@ use tokio::sync::{mpsc, Mutex, OnceCell, RwLock};
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::time;
 
-use crate::custom_error::{BoxErr, BoxResult, decode_failed_by_insufficient_data_err};
+use crate::custom_error::{decode_failed_by_insufficient_data_err, CustomResult, CustomError};
 use crate::feature::value::ValueKind;
 use crate::store::Storable;
 
@@ -43,7 +43,7 @@ pub struct Wal {
 }
 
 impl Wal {
-    pub async fn send_log(&self, tid: u64, kind: WalLogKind, value: Option<WalFeatureUpdateValue>) -> BoxResult<u64> {
+    pub async fn send_log(&self, tid: u64, kind: WalLogKind, value: Option<WalFeatureUpdateValue>) -> CustomResult<u64> {
         let send = self.send.lock().await;
         let action_id = generate_action_id();
         send.send(WalLogItem {
@@ -51,20 +51,20 @@ impl Wal {
             kind,
             action_id,
             value,
-        }).await.map_err(|e| -> BoxErr{ e.into() })?;
+        }).await?;
 
         Ok(action_id)
     }
 
-    pub async fn send_begin_log(&self, tid: u64) -> BoxResult<u64> {
+    pub async fn send_begin_log(&self, tid: u64) -> CustomResult<u64> {
         self.send_log(tid, WalLogKind::Begin, None).await
     }
 
-    pub async fn send_feature_update_log(&self, tid: u64, value: WalFeatureUpdateValue) -> BoxResult<u64> {
+    pub async fn send_feature_update_log(&self, tid: u64, value: WalFeatureUpdateValue) -> CustomResult<u64> {
         self.send_log(tid, WalLogKind::FeatureUpdate, Some(value)).await
     }
 
-    pub async fn commit_log(&self, tid: u64) -> BoxResult<()> {
+    pub async fn commit_log(&self, tid: u64) -> CustomResult<()> {
         let action_id = self.send_log(tid, WalLogKind::Commit, None).await?;
         let mut interval = time::interval(time::Duration::from_millis(10));
         loop {
@@ -72,6 +72,7 @@ impl Wal {
             let state = self.state.read().await;
             info!("stored_num:{},action_id:{}", state.stored_num, action_id);
             if state.stored_num >= action_id {
+                info!("commit_log:{}",tid);
                 return Ok(());
             }
         }
@@ -90,11 +91,11 @@ impl Wal {
                         warn!("序列化失败:{:?}", message);
                     }
                 }
-                if message.action_id % 100 == 0 {
+               // if message.action_id % 100 == 0 {
                     f.sync_data().await;
                     let mut lock = state.write().await;
                     (*lock).stored_num = message.action_id;
-                }
+               // }
             }
         });
     }
@@ -110,14 +111,13 @@ impl WalState {
     }
 }
 
-pub async fn crate_wal(data_dir: String) -> BoxResult<Wal> {
+pub async fn crate_wal(data_dir: String) -> CustomResult<Wal> {
     let f = OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .open(get_wal_file_path(data_dir))
-        .await
-        .map_err(|e| -> BoxErr { e.into() })?;
+        .await?;
 
     let (tx, rx): (Sender<WalLogItem>, Receiver<WalLogItem>) = mpsc::channel(10000);
     let state = WalState::new();
@@ -155,7 +155,7 @@ pub struct WalLogItem {
 }
 
 impl Storable for WalLogItem {
-    fn encode(&self, buf: &mut BytesMut) -> BoxResult<()> {
+    fn encode(&self, buf: &mut BytesMut) -> CustomResult<()> {
         buf.put_u32(self.need_space() as u32);
         buf.put_u64(self.tid);
         let kind: u8 = self.kind.clone().into();
@@ -171,7 +171,7 @@ impl Storable for WalLogItem {
         Ok(())
     }
 
-    fn decode(buf: &mut BytesMut) -> BoxResult<Self> where Self: Sized {
+    fn decode(buf: &mut BytesMut) -> CustomResult<Self> where Self: Sized {
         if buf.len() < 4 {
             return Err(decode_failed_by_insufficient_data_err());
         }
@@ -213,7 +213,7 @@ pub struct WalFeatureUpdateValue {
 }
 
 impl Storable for WalFeatureUpdateValue {
-    fn encode(&self, buf: &mut BytesMut) -> BoxResult<()> {
+    fn encode(&self, buf: &mut BytesMut) -> CustomResult<()> {
         buf.put_u64(self.key);
         match &self.undo_v {
             None => {
@@ -227,7 +227,7 @@ impl Storable for WalFeatureUpdateValue {
         self.redo_v.encode(buf)
     }
 
-    fn decode(buf: &mut BytesMut) -> BoxResult<Self> where Self: Sized {
+    fn decode(buf: &mut BytesMut) -> CustomResult<Self> where Self: Sized {
         let key = buf.get_u64();
         let undo_v_flag = buf.get_u8();
         let undo_v = if (undo_v_flag == 0){

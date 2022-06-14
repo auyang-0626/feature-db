@@ -6,7 +6,7 @@ use serde_json::Value;
 use string_builder::Builder;
 use tokio::sync::RwLockWriteGuard;
 
-use crate::custom_error::{BoxErr, BoxResult, column_not_found_in_ds_err};
+use crate::custom_error::{column_not_found_in_ds_err, CustomResult, CustomError};
 use crate::ds::column::{ColumnType, get_value_as_u64, get_value_to_str};
 use crate::feature::value::FeatureValue;
 use crate::store::{Storable, Store};
@@ -30,7 +30,7 @@ pub struct CountFeatureTemplate {
 impl CountFeatureTemplate {
     pub fn build_key(&self, event: &Value,
                      feature_id: u64,
-                     column_type_map: &HashMap<String, ColumnType>) -> BoxResult<String> {
+                     column_type_map: &HashMap<String, ColumnType>) -> CustomResult<String> {
         // 拼接主键
         let mut builder = Builder::default();
         for k in &self.group_keys {
@@ -40,7 +40,7 @@ impl CountFeatureTemplate {
             builder.append(get_value_to_str(event, k, column_type)?);
         }
         builder.append(feature_id.to_string());
-        builder.string().map_err(|e| -> BoxErr { e.into() })
+        builder.string().map_err(|e| -> CustomError { e.into() })
     }
 
 
@@ -48,7 +48,7 @@ impl CountFeatureTemplate {
                                      column_type_map: &HashMap<String, ColumnType>,
                                      key: &String,
                                      page: &mut RwLockWriteGuard<'_, Page>,
-                                     wal: &Wal) -> BoxResult<WalFeatureUpdateValue> {
+                                     wal: &Wal) -> CustomResult<WalFeatureUpdateValue> {
 
         // 事件时间
         let time = get_value_as_u64(event, &self.time_key)?;

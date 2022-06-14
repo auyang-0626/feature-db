@@ -11,7 +11,7 @@ use tokio::time;
 
 use feature_base::calc_hash;
 use feature_base::config::Config;
-use feature_base::custom_error::{BoxErr, BoxResult, common_err};
+use feature_base::custom_error::{CustomError, CustomResult, common_err};
 use feature_base::ds::{DataSet, DsUpdateResult, FeatureUpdateResult};
 use feature_base::ds::column::get_value_as_int;
 use feature_base::feature::Feature;
@@ -32,7 +32,7 @@ const KEY_DS: &str = "ds";
 
 impl Node {
     /// 根据数据，更新关联的所有指标
-    async fn update(&self, event: Value) -> BoxResult<DsUpdateResult> {
+    async fn update(&self, event: Value) -> CustomResult<DsUpdateResult> {
         let ds_value = get_value_as_int(&event, KEY_DS)?;
         let ds = self.datasets.get(&ds_value)
             .ok_or(common_err(format!("找不到对应的ds:{}", ds_value)))?.clone();
@@ -116,7 +116,7 @@ fn build_feature_keys<'a>(data: &'a Value, ds: &'a DataSet) -> (HashMap<String, 
 }
 
 /// 创建和初始化node
-pub async fn create_and_init() -> BoxResult<Arc<Node>> {
+pub async fn create_and_init() -> CustomResult<Arc<Node>> {
     let ds_vec = meta_client::fetch_all_dataset().expect("创建node失败");
     let mut datasets = HashMap::new();
     for ds in ds_vec {

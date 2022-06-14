@@ -1,9 +1,9 @@
 
 use serde_json::Value;
-use feature_base::custom_error::BoxResult;
+use feature_base::custom_error::CustomResult;
 use feature_base::ds::DataSet;
 
-pub fn fetch_all_dataset() -> BoxResult<Vec<DataSet>> {
+pub fn fetch_all_dataset() -> CustomResult<Vec<DataSet>> {
     let data = r#"
     [
      {

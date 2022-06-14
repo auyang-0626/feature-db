@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize, Serializer};
 use tokio::io::AsyncWriteExt;
 
-use crate::custom_error::{BoxResult, common_err};
+use crate::custom_error::{common_err, CustomResult};
 use crate::store::Storable;
 use crate::store::wal::{WalLogItem, Wal, WalFeatureUpdateValue};
 use bytes::{BytesMut, BufMut, Buf};
@@ -20,7 +20,7 @@ const VALUE_KIND_INT: u8 = 1;
 const VALUE_KIND_FLOAT: u8 = 2;
 
 impl Storable for ValueKind {
-    fn encode(&self, buf: &mut BytesMut) -> BoxResult<()> {
+    fn encode(&self, buf: &mut BytesMut) -> CustomResult<()> {
         match self {
             ValueKind::Int(v) => {
                 buf.put_u8(VALUE_KIND_INT);
@@ -33,7 +33,7 @@ impl Storable for ValueKind {
         };
         Ok(())
     }
-    fn decode(buf: &mut BytesMut) -> BoxResult<ValueKind> {
+    fn decode(buf: &mut BytesMut) -> CustomResult<ValueKind> {
         let kind_num = buf.get_u8();
         match kind_num {
             VALUE_KIND_INT => Ok(ValueKind::Int(buf.get_u64())),
@@ -55,7 +55,7 @@ impl FeatureValue {
         FeatureValue(BTreeMap::new())
     }
 
-    pub fn add_int(&self, time: u64, window_size: u64, value: u64) ->BoxResult<WalFeatureUpdateValue> {
+    pub fn add_int(&self, time: u64, window_size: u64, value: u64) ->CustomResult<WalFeatureUpdateValue> {
         let t = time - time % window_size;
 
         let res = match self.0.get(&t) {
@@ -107,7 +107,7 @@ impl FeatureValue {
 }
 
 impl Storable for FeatureValue {
-    fn encode(&self, buf: &mut BytesMut) -> BoxResult<()> {
+    fn encode(&self, buf: &mut BytesMut) -> CustomResult<()> {
         buf.put_u32(self.0.len() as u32);
         for (k, v) in &self.0 {
             buf.put_u64(*k);
@@ -116,7 +116,7 @@ impl Storable for FeatureValue {
         Ok(())
     }
 
-    fn decode(buf: &mut BytesMut) -> BoxResult<Self> where Self: Sized {
+    fn decode(buf: &mut BytesMut) -> CustomResult<Self> where Self: Sized {
         let len = buf.get_u32();
         let mut tree = BTreeMap::new();
         for i in 0..len {

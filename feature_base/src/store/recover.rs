@@ -1,17 +1,19 @@
 use std::sync::Arc;
 
-use log::info;
+use log::{info,warn};
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncReadExt;
 use tokio::sync::RwLock;
 
-use crate::custom_error::{BoxErr, BoxResult};
+
 use crate::store::{Store, Storable};
 use crate::store::wal::{get_wal_file_path, WalLogItem};
-use bytes::{Bytes, BytesMut};
+use bytes::{Bytes, BytesMut, Buf};
 use std::error::Error;
+use crate::custom_error::{CustomResult, CustomError, DECODE_FAILED_BY_INSUFFICIENT_DATA_CODE};
+use std::io::Cursor;
 
-pub async fn recover(store: &mut Store) -> BoxResult<()> {
+pub async fn recover(store: &mut Store) -> CustomResult<()> {
     //初始化
     for (slot_id, slot) in &store.slot_index {
         let page = slot.new_page().await?;
@@ -26,23 +28,29 @@ pub async fn recover(store: &mut Store) -> BoxResult<()> {
         .write(true)
         .create(true)
         .open(wal_log_path)
-        .await
-        .map_err(|e| -> BoxErr { e.into() })?;
+        .await?;
 
-    let mut bytebuffer = BytesMut::with_capacity(1024);
+    let mut buf = BytesMut::with_capacity(1024);
 
-    while f.read_buf(&mut bytebuffer).await? > 0 {
-        info!("bytebuffer:{}", bytebuffer.len());
-        let res = WalLogItem::decode(&mut bytebuffer);
+    loop {
+
+        let res = WalLogItem::decode(&mut buf);
         match res {
             Ok(item) => {
                 info!("item:{:?}",item);
             }
             Err(e) => {
-                info!("ee:{}",e)
+                if e.code == DECODE_FAILED_BY_INSUFFICIENT_DATA_CODE {
+                    if f.read_buf(&mut buf).await?  == 0 {
+                        break;
+                    }
+                } else {
+                    warn!("解析出现错误:buf={},{}", buf.len(), e);
+                }
             }
         }
     }
+
     Ok(())
 }
 
