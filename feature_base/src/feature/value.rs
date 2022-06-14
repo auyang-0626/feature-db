@@ -8,6 +8,7 @@ use crate::custom_error::{common_err, CustomResult};
 use crate::store::Storable;
 use crate::store::wal::{WalLogItem, Wal, WalFeatureUpdateValue};
 use bytes::{BytesMut, BufMut, Buf};
+use std::io::Cursor;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum ValueKind {
@@ -33,7 +34,7 @@ impl Storable for ValueKind {
         };
         Ok(())
     }
-    fn decode(buf: &mut BytesMut) -> CustomResult<ValueKind> {
+    fn decode(buf: &mut Cursor<&[u8]>) -> CustomResult<ValueKind> {
         let kind_num = buf.get_u8();
         match kind_num {
             VALUE_KIND_INT => Ok(ValueKind::Int(buf.get_u64())),
@@ -116,7 +117,7 @@ impl Storable for FeatureValue {
         Ok(())
     }
 
-    fn decode(buf: &mut BytesMut) -> CustomResult<Self> where Self: Sized {
+    fn decode(buf: &mut Cursor<&[u8]>) -> CustomResult<Self> where Self: Sized {
         let len = buf.get_u32();
         let mut tree = BTreeMap::new();
         for i in 0..len {
@@ -148,6 +149,7 @@ mod tests {
     use std::collections::BTreeMap;
     use crate::store::page::Page;
     use bytes::BytesMut;
+    use std::io::Cursor;
 
     #[test]
     pub fn test_value_serialize() {
@@ -173,7 +175,8 @@ mod tests {
         info!("buf:{:?}", buf.len());
         info!("buf:{:?}", buf);
 
-        let v = Page::decode(&mut buf).expect("aaa");
+        let mut cursor: Cursor<&[u8]> = Cursor::new(&*buf);
+        let v = Page::decode(&mut cursor).expect("aaa");
         info!("v:{:?}", v);
         info!("v.need_space:{:?}", v.need_space());
         info!("buf:{:?}", buf.len());

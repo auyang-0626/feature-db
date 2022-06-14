@@ -15,6 +15,7 @@ use tokio::time;
 use crate::custom_error::{decode_failed_by_insufficient_data_err, CustomResult, CustomError};
 use crate::feature::value::ValueKind;
 use crate::store::Storable;
+use std::io::Cursor;
 
 static T_ID: AtomicU64 = AtomicU64::new(0);
 pub static Wal_File_Name: &str = "";
@@ -171,12 +172,12 @@ impl Storable for WalLogItem {
         Ok(())
     }
 
-    fn decode(buf: &mut BytesMut) -> CustomResult<Self> where Self: Sized {
-        if buf.len() < 4 {
+    fn decode(buf: &mut Cursor<&[u8]>) -> CustomResult<Self> where Self: Sized {
+        if buf.remaining() < 4 {
             return Err(decode_failed_by_insufficient_data_err());
         }
         let item_len = buf.get_u32();
-        if buf.len() < item_len as usize {
+        if buf.remaining() < item_len as usize {
             return Err(decode_failed_by_insufficient_data_err());
         }
         let tid = buf.get_u64();
@@ -227,7 +228,7 @@ impl Storable for WalFeatureUpdateValue {
         self.redo_v.encode(buf)
     }
 
-    fn decode(buf: &mut BytesMut) -> CustomResult<Self> where Self: Sized {
+    fn decode(buf: &mut Cursor<&[u8]>) -> CustomResult<Self> where Self: Sized {
         let key = buf.get_u64();
         let undo_v_flag = buf.get_u8();
         let undo_v = if (undo_v_flag == 0){

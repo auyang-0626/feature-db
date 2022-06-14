@@ -8,6 +8,7 @@ use crate::custom_error::{common_err, CustomResult, CustomError};
 use crate::feature::value::FeatureValue;
 use crate::store::Storable;
 use bytes::{BytesMut, BufMut, Buf};
+use std::io::Cursor;
 
 /// 页
 #[derive(Debug, Serialize, Deserialize)]
@@ -55,18 +56,19 @@ impl Storable for Page {
         Ok(())
     }
 
-    fn decode(buf: &mut BytesMut) -> CustomResult<Self> where Self: Sized {
-        if buf.len() < 10 {
+    fn decode(buf: &mut Cursor<&[u8]>) -> CustomResult<Self> where Self: Sized {
+        if buf.remaining() < 10 {
             return Err(common_err(format!("page数据格式非法，解析失败！")));
         }
         let slot_id = buf.get_u16();
         let page_id = buf.get_u64();
         let mut page = Page::new(slot_id, page_id as usize);
 
-        while buf.len() > 0 {
+        while buf.remaining() > 0 {
             let key_len = buf.get_u16();
 
-            let bytes = buf.split_to(key_len as usize);
+           // buf.read
+            let bytes = buf.copy_to_bytes(key_len as usize);
             let key = String::from_utf8(bytes.to_vec())?;
 
             let value = FeatureValue::decode(buf)?;

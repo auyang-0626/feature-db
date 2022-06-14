@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use std::io::{Bytes};
+use std::io::{Bytes, Cursor};
 use std::sync::Arc;
 
 use bitmaps::Bitmap;
@@ -68,7 +68,7 @@ pub trait Storable {
     fn encode(&self, buf: &mut BytesMut) -> CustomResult<()>;
 
     /// 从字节中实例化
-    fn decode(buf: &mut BytesMut) -> CustomResult<Self> where Self: Sized;
+    fn decode(buf: &mut Cursor<&[u8]>) -> CustomResult<Self> where Self: Sized;
 
     /// 需要的字节大小
     fn need_space(&self) -> usize;
