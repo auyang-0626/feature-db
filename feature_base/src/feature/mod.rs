@@ -3,13 +3,13 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::custom_error::{column_not_found_in_ds_err, CustomResult};
-use crate::ds::column::{check_value_and_type_match, ColumnType};
+use crate::custom_error::{CustomResult};
+use crate::ds::column::{ ColumnType};
 use crate::feature::count_feature::CountFeatureTemplate;
-use crate::store::Store;
+
 use crate::store::wal::{Wal, WalFeatureUpdateValue};
 use crate::feature::FeatureTemplate::COUNT;
-use crate::feature::value::FeatureValue;
+
 use crate::store::page::Page;
 use tokio::sync::RwLockWriteGuard;
 

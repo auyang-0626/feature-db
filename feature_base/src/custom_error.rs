@@ -51,6 +51,11 @@ impl From<serde_json::Error> for CustomError {
         common_err(e.to_string())
     }
 }
+impl From<tokio::sync::oneshot::error::RecvError> for CustomError {
+    fn from(e: tokio::sync::oneshot::error::RecvError) -> Self {
+        common_err(e.to_string())
+    }
+}
 
 // 根据错误码显示不同的错误信息
 impl fmt::Display for CustomError {

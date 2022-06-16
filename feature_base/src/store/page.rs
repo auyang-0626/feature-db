@@ -1,32 +1,32 @@
 use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::io::Cursor;
 
+
+use bytes::{Buf, BufMut, BytesMut};
 use serde::{Deserialize, Serialize};
-use tokio::sync::{Mutex, RwLock};
 
-use crate::custom_error::{common_err, CustomResult, CustomError};
+
+use crate::custom_error::{common_err, CustomResult};
 use crate::feature::value::FeatureValue;
 use crate::store::Storable;
-use bytes::{BytesMut, BufMut, Buf};
-use std::io::Cursor;
 
 /// 页
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Page {
     pub slot_id: u16,
-    pub id: usize,
+    pub id: u64,
     pub data: BTreeMap<String, FeatureValue>,
     /// 是否是脏页
     pub dirty: bool,
 }
 
 impl Page {
-    pub fn new(slot_id: u16, id: usize) -> Page {
+    pub fn new(slot_id: u16, id: u64) -> Page {
         Page {
             slot_id,
             id,
             data: BTreeMap::new(),
-            dirty:false
+            dirty: false,
         }
     }
 
@@ -45,7 +45,7 @@ impl Page {
 }
 
 impl Storable for Page {
-    fn encode(&self, buf: &mut BytesMut) ->CustomResult<()>{
+    fn encode(&self, buf: &mut BytesMut) -> CustomResult<()> {
         buf.put_u16(self.slot_id);
         buf.put_u64(self.id as u64);
         for (k, v) in &self.data {
@@ -62,12 +62,12 @@ impl Storable for Page {
         }
         let slot_id = buf.get_u16();
         let page_id = buf.get_u64();
-        let mut page = Page::new(slot_id, page_id as usize);
+        let mut page = Page::new(slot_id, page_id);
 
         while buf.remaining() > 0 {
             let key_len = buf.get_u16();
 
-           // buf.read
+            // buf.read
             let bytes = buf.copy_to_bytes(key_len as usize);
             let key = String::from_utf8(bytes.to_vec())?;
 
@@ -79,6 +79,10 @@ impl Storable for Page {
     }
 
     fn need_space(&self) -> usize {
-        0
+        let mut space = 2 + 8;
+        for (k, v) in &self.data {
+            space = space + 2 + k.len() + v.need_space();
+        }
+        space
     }
 }

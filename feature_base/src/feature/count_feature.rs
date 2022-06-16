@@ -6,10 +6,10 @@ use serde_json::Value;
 use string_builder::Builder;
 use tokio::sync::RwLockWriteGuard;
 
-use crate::custom_error::{column_not_found_in_ds_err, CustomResult, CustomError};
+use crate::custom_error::{column_not_found_in_ds_err, CustomError, CustomResult};
 use crate::ds::column::{ColumnType, get_value_as_u64, get_value_to_str};
 use crate::feature::value::FeatureValue;
-use crate::store::{Storable, Store};
+
 use crate::store::page::Page;
 use crate::store::wal::{Wal, WalFeatureUpdateValue};
 use crate::WindowUnit;
@@ -58,13 +58,13 @@ impl CountFeatureTemplate {
         //
         let update_res = match old_value {
             None => {
-                let mut sv = FeatureValue::new();
-                let update_res = sv.add_int(time, self.window_unit.to_millis(self.window_size), 1)?;
+                let  sv = FeatureValue::new();
+                let update_res = sv.add_int(key, time, self.window_unit.to_millis(self.window_size), 1)?;
                 page.put(key.clone(), sv).await;
                 update_res
             }
             Some(sv) => {
-                sv.add_int(time, self.window_unit.to_millis(self.window_size), 1)?
+                sv.add_int(key, time, self.window_unit.to_millis(self.window_size), 1)?
             }
         };
         Ok(update_res)

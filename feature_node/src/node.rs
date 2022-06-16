@@ -160,6 +160,7 @@ mod tests {
 
     use crate::meta_client;
     use crate::node::create_and_init;
+    use tokio::sync::Semaphore;
 
     #[derive(Serialize, Deserialize, Debug)]
     struct Event {
@@ -180,13 +181,15 @@ mod tests {
         rt.block_on(async {
             let node_bs = create_and_init().await.expect("创建node失败！");
             let dt = Local::now();
+            let semaphore =Arc::new(Semaphore::new(1000));
 
-            for i in 0..100 {
+            for i in 0..10000000000 {
                 let node = node_bs.clone();
+                let acquire = semaphore.clone().acquire_owned().await.unwrap();
                 rt.spawn(async move {
                     let mut rng = rand::rngs::StdRng::from_entropy();
-                    //let user_id: i64 = rng.gen_range(1000..1010);
-                    let user_id: i64 = 1011;
+                    let user_id: i64 = rng.gen_range(1000..10010);
+                    // let user_id: i64 = 1011;
                     let amount: f64 = rng.gen_range(100.0..200.0);
                     let e = Event {
                         ds: 101,
@@ -198,6 +201,7 @@ mod tests {
 
                     let v: Value = serde_json::from_str(&data).expect("xxx");
                     info!("write result:{:?}", node.update(v).await);
+                    drop(acquire);
                 });
             }
         });

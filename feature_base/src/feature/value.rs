@@ -1,12 +1,12 @@
-use std::cell::RefCell;
+
 use std::collections::BTreeMap;
 
-use serde::{Deserialize, Serialize, Serializer};
-use tokio::io::AsyncWriteExt;
+use serde::{Deserialize, Serialize};
+
 
 use crate::custom_error::{common_err, CustomResult};
 use crate::store::Storable;
-use crate::store::wal::{WalLogItem, Wal, WalFeatureUpdateValue};
+use crate::store::wal::{ WalFeatureUpdateValue};
 use bytes::{BytesMut, BufMut, Buf};
 use std::io::Cursor;
 
@@ -56,7 +56,7 @@ impl FeatureValue {
         FeatureValue(BTreeMap::new())
     }
 
-    pub fn add_int(&self, time: u64, window_size: u64, value: u64) ->CustomResult<WalFeatureUpdateValue> {
+    pub fn add_int(&self, key: &String, time: u64, window_size: u64, value: u64) ->CustomResult<WalFeatureUpdateValue> {
         let t = time - time % window_size;
 
         let res = match self.0.get(&t) {
@@ -66,7 +66,8 @@ impl FeatureValue {
                 mutable_t.0.insert(t, new_value.clone());
 
                 Ok(WalFeatureUpdateValue{
-                    key: t,
+                    fk:key.clone(),
+                    tk:t,
                     undo_v: None,
                     redo_v: new_value
                 })
@@ -77,7 +78,8 @@ impl FeatureValue {
                     let new_value = ValueKind::Int(v + value);
                     mutable_t.0.insert(t, new_value.clone());
                     Ok(WalFeatureUpdateValue{
-                        key: t,
+                        fk:key.clone(),
+                        tk:t,
                         undo_v: Some(ValueKind::Int(*v)),
                         redo_v: new_value
                     })
@@ -120,7 +122,7 @@ impl Storable for FeatureValue {
     fn decode(buf: &mut Cursor<&[u8]>) -> CustomResult<Self> where Self: Sized {
         let len = buf.get_u32();
         let mut tree = BTreeMap::new();
-        for i in 0..len {
+        for _ in 0..len {
             let key = buf.get_u64();
             let v = ValueKind::decode(buf)?;
             tree.insert(key, v);
@@ -138,10 +140,10 @@ impl Storable for FeatureValue {
 
 #[cfg(test)]
 mod tests {
-    use std::fmt::Formatter;
+
 
     use log::info;
-    use serde::Serialize;
+
 
     use crate::feature::value::{ValueKind, FeatureValue};
     use crate::init_log;
@@ -155,7 +157,7 @@ mod tests {
     pub fn test_value_serialize() {
         init_log();
 
-        let mut rt = tokio::runtime::Runtime::new().unwrap();
+        //let mut rt = tokio::runtime::Runtime::new().unwrap();
 
         let v = ValueKind::Int(212);
         let v2 = ValueKind::Float(212222.0);
@@ -171,7 +173,7 @@ mod tests {
         page.data.insert("xxx杨2".to_string(), feature_value2);
 
         let mut buf = BytesMut::new();
-        page.encode(&mut buf);
+        page.encode(&mut buf).expect("page.encode");
         info!("buf:{:?}", buf.len());
         info!("buf:{:?}", buf);
 

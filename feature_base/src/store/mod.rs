@@ -1,20 +1,22 @@
-use std::collections::{BTreeMap, HashMap};
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
-use std::io::{Bytes, Cursor};
+use std::collections::{ HashMap};
+
+
+use std::io::{Cursor};
 use std::sync::Arc;
 
-use bitmaps::Bitmap;
-use log::info;
-use tokio::sync::{Mutex, RwLock};
-use tokio::time;
 
-use crate::calc_hash;
+
+use tokio::sync::{ RwLock};
+
+
+
 use crate::custom_error::{common_err, CustomResult};
-use crate::feature::value::FeatureValue;
+
 use crate::store::page::Page;
 use crate::store::slot::{Slot, SLOT_NUM_BY_BIT};
 use bytes::BytesMut;
+use std::any::{Any};
+use std::fmt::Debug;
 
 pub mod wal;
 pub mod page;
@@ -63,7 +65,7 @@ impl Store {
 }
 
 /// 可存储的接口定义
-pub trait Storable {
+pub trait Storable : Any + Debug + Send + Sync + Downcast {
     /// 转为字节
     fn encode(&self, buf: &mut BytesMut) -> CustomResult<()>;
 
@@ -72,4 +74,16 @@ pub trait Storable {
 
     /// 需要的字节大小
     fn need_space(&self) -> usize;
+}
+
+
+
+pub trait Downcast: Any {
+    fn as_any(&mut self) -> &mut dyn Any;
+}
+
+impl<T: Any> Downcast for T {
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
 }

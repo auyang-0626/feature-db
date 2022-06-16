@@ -1,42 +1,39 @@
+
+use std::io::{Cursor, SeekFrom};
 use std::sync::Arc;
 
-use log::{info,warn};
+use bytes::{ BytesMut};
+use log::{info, warn};
 use tokio::fs::OpenOptions;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tokio::sync::RwLock;
 
-
-use crate::store::{Store, Storable};
+use crate::custom_error::{ CustomResult, DECODE_FAILED_BY_INSUFFICIENT_DATA_CODE};
+use crate::store::{Storable, Store};
 use crate::store::wal::{get_wal_file_path, WalLogItem};
-use bytes::{Bytes, BytesMut, Buf};
-use std::error::Error;
-use crate::custom_error::{CustomResult, CustomError, DECODE_FAILED_BY_INSUFFICIENT_DATA_CODE};
-use std::io::{Cursor, SeekFrom};
 
 pub async fn recover(store: &mut Store) -> CustomResult<()> {
-    //初始化
+    // 初始化
     for (slot_id, slot) in &store.slot_index {
         let page = slot.new_page().await?;
         slot.page_tree.write().await
             .insert(0, Arc::new(RwLock::new(page)));
     }
-    //todo 从磁盘恢复
+    // 从磁盘恢复
     let wal_log_path = get_wal_file_path(store.data_dir.clone());
 
     let mut f = OpenOptions::new()
         .read(true)
-        .write(true)
-        .create(true)
         .open(wal_log_path)
         .await?;
 
-    let mut buf = BytesMut::with_capacity(1024);
 
+
+    let mut buf = BytesMut::with_capacity(1024);
     let mut before_pos = 0;
     let mut pos = 0;
 
     loop {
-
         let res = {
             let mut cursor: Cursor<&[u8]> = Cursor::new(&*buf);
             cursor.seek(SeekFrom::Start(before_pos)).await;
@@ -47,12 +44,12 @@ pub async fn recover(store: &mut Store) -> CustomResult<()> {
         match res {
             Ok(item) => {
                 before_pos = pos;
-                info!("item:{:?}",item);
+                info!("item:{:?}", item);
             }
             Err(e) => {
                 if e.code == DECODE_FAILED_BY_INSUFFICIENT_DATA_CODE {
                     let mut buf2 = BytesMut::with_capacity(1024);
-                    if f.read_buf(&mut buf2).await?  == 0 {
+                    if f.read_buf(&mut buf2).await? == 0 {
                         break;
                     } else {
                         buf.extend(buf2);
@@ -69,11 +66,16 @@ pub async fn recover(store: &mut Store) -> CustomResult<()> {
 
 #[cfg(test)]
 mod tests {
-    use crate::store::Store;
     use crate::config::Config;
+    use crate::store::{Store};
+
+
+
+
+
 
     #[test]
-    pub fn test_recover(){
+    pub fn test_recover() {
         crate::init_log();
 
         let rt = tokio::runtime::Builder::new_multi_thread()
@@ -87,7 +89,5 @@ mod tests {
 
             Store::new(config.data_dir.clone()).await;
         });
-
-
     }
 }
