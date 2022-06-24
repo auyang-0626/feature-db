@@ -48,7 +48,7 @@ impl Storable for ValueKind {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize,Clone)]
 pub struct FeatureValue(BTreeMap<u64, ValueKind>);
 
 impl FeatureValue {
@@ -114,7 +114,7 @@ impl Storable for FeatureValue {
         buf.put_u32(self.0.len() as u32);
         for (k, v) in &self.0 {
             buf.put_u64(*k);
-            v.encode(buf);
+            v.encode(buf)?;
         }
         Ok(())
     }
@@ -168,7 +168,7 @@ mod tests {
         let mut feature_value2 = FeatureValue(BTreeMap::new());
         feature_value2.0.insert(1, v2);
 
-        let mut page = Page::new(5, 1);
+        let mut page = Page::new(5, 1,0,100000);
         page.data.insert("xxx杨".to_string(), feature_value);
         page.data.insert("xxx杨2".to_string(), feature_value2);
 

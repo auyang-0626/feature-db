@@ -1,35 +1,21 @@
-use std::collections::{ HashMap};
-
-
-use std::io::{Cursor};
+use std::any::Any;
+use std::collections::HashMap;
+use std::fmt::Debug;
+use std::io::Cursor;
 use std::sync::Arc;
 
-
-
+use bytes::BytesMut;
 use tokio::sync::{ RwLock};
-
-
-
+use serde::{Deserialize, Serialize};
 use crate::custom_error::{common_err, CustomResult};
-
 use crate::store::page::Page;
 use crate::store::slot::{Slot, SLOT_NUM_BY_BIT};
-use bytes::BytesMut;
-use std::any::{Any};
-use std::fmt::Debug;
+use crate::store::wal::Wal;
 
 pub mod wal;
 pub mod page;
 pub mod slot;
 mod recover;
-
-
-/// 页的大小
-const PAGE_SIZE: u32 = 2 ^ 16;
-
-/// 文件大小
-const FILE_SIZE: u32 = 2 ^ 30;
-
 
 /// store-->slot--->page--->record
 pub struct Store {
@@ -54,7 +40,8 @@ impl Store {
 
     /// 计算slot的值
     pub fn get_slot(&self, key_hash: u64) -> CustomResult<&Slot> {
-        let slot_id = (key_hash >> (64 - SLOT_NUM_BY_BIT)) as u16;
+        // let slot_id = (key_hash >> (64 - SLOT_NUM_BY_BIT)) as u16;
+        let slot_id = 0;
         self.slot_index.get(&slot_id).ok_or(common_err(format!("获取slot失败！")))
     }
 
@@ -62,10 +49,19 @@ impl Store {
         let slot = self.get_slot(key_hash)?;
         slot.get_page(key_hash).await
     }
+
+    pub async fn check_point(&self, wal: &Wal) -> CustomResult<()> {
+        for (_, slot) in &self.slot_index {
+            slot.store_page(wal).await?;
+            slot.store_page_index(wal).await?;
+        }
+
+        Ok(())
+    }
 }
 
 /// 可存储的接口定义
-pub trait Storable : Any + Debug + Send + Sync + Downcast {
+pub trait Storable: Any + Debug + Send + Sync + Downcast {
     /// 转为字节
     fn encode(&self, buf: &mut BytesMut) -> CustomResult<()>;
 
@@ -77,7 +73,6 @@ pub trait Storable : Any + Debug + Send + Sync + Downcast {
 }
 
 
-
 pub trait Downcast: Any {
     fn as_any(&mut self) -> &mut dyn Any;
 }
@@ -85,5 +80,55 @@ pub trait Downcast: Any {
 impl<T: Any> Downcast for T {
     fn as_any(&mut self) -> &mut dyn Any {
         self
+    }
+}
+
+/// 数据被改变的记录
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DirtyRecord {
+    pub first_action_id: u64,
+    pub last_action_id: u64,
+}
+
+#[derive(Debug)]
+pub struct Dirty( RwLock<Option<DirtyRecord>>);
+
+impl Dirty {
+    pub fn new() -> Dirty {
+        Dirty(RwLock::new(None))
+    }
+
+    pub async fn is_dirty(&self) -> bool {
+        self.0.read().await.is_some()
+    }
+
+    pub async fn update(&self, action_id: u64) -> bool{
+        // 是否是第一次改动
+        let mut first_update = false;
+
+        let mut op = self.0.write().await;
+        *op = match *op {
+            None => {
+                first_update = true;
+                Some(DirtyRecord {
+                    first_action_id: action_id,
+                    last_action_id: action_id,
+                })
+            }
+            Some(ref record) => {
+                Some(
+                    DirtyRecord {
+                        first_action_id: record.first_action_id,
+                        last_action_id: action_id,
+                    }
+                )
+            }
+        };
+        first_update
+    }
+
+    pub async fn reset(&self){
+        let mut op = self.0.write().await;
+        *op = None
     }
 }

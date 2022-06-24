@@ -3,12 +3,14 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 
 pub mod custom_error;
 pub mod feature;
 pub mod ds;
 pub mod store;
 pub mod config;
+pub mod tools;
 
 /// 时间单位
 #[derive(Serialize, Deserialize, Debug)]
@@ -31,7 +33,11 @@ impl WindowUnit {
 }
 
 pub fn init_log() {
-    env_logger::init();
+    let mut config_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    config_path.push("log4rs.yaml");
+    println!("{:?}",config_path);
+   // Path::new("log4rs.yaml").metadata()?.
+    log4rs::init_file(config_path, Default::default()).unwrap();
 }
 
 /// 计算hash

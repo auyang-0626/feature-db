@@ -1,22 +1,18 @@
-use std::borrow::BorrowMut;
 use std::collections::HashMap;
-use std::error::Error;
 use std::sync::Arc;
 
-use log::info;
-use serde::{Deserialize, Serialize};
+use log::{info, warn};
 use serde_json::Value;
-use tokio::io::AsyncReadExt;
 use tokio::time;
 
 use feature_base::calc_hash;
 use feature_base::config::Config;
-use feature_base::custom_error::{CustomError, CustomResult, common_err};
+use feature_base::custom_error::{common_err, CustomError, CustomResult};
 use feature_base::ds::{DataSet, DsUpdateResult, FeatureUpdateResult};
 use feature_base::ds::column::get_value_as_int;
 use feature_base::feature::Feature;
 use feature_base::store::Store;
-use feature_base::store::wal::{crate_wal, generate_tid, Wal, WalFeatureUpdateValue, WalState};
+use feature_base::store::wal::{crate_wal, generate_tid, Wal, WalState};
 
 use crate::meta_client;
 
@@ -70,12 +66,11 @@ impl Node {
         // 锁定后，计算feature新值，并更新
         for (key, feature) in &key_feature_map {
             if let Some(mk) = feature_mk_map.get(key) {
-                if let Some(mut locked_page) = page_map.get_mut(mk) {
-                    info!("key = {}", key);
+                if let Some(locked_page) = page_map.get_mut(mk) {
                     match feature.calc_and_update(&event, &ds.column_type_map, key, locked_page, &self.wal).await {
                         Ok(res) => {
-                            locked_page.after_update();
-                            self.wal.send_feature_update_log(tid, res).await;
+                            let action_id = self.wal.send_feature_update_log(tid, res).await?;
+                            locked_page.after_update(action_id, &self.store).await;
                         }
                         Err(e) => {
                             result_map.insert(feature.id, FeatureUpdateResult::failed(e.to_string()));
@@ -90,10 +85,17 @@ impl Node {
     }
 
     pub async fn check_point(&self) {
-        let mut interval = time::interval(time::Duration::from_secs(1));
+        let mut interval = time::interval(time::Duration::from_secs(5));
         loop {
             interval.tick().await;
-            info!("check_point run!");
+            info!("check_point start...");
+
+            match self.store.check_point(&self.wal).await {
+                Ok(_) => {}
+                Err(e) => {
+                    warn! {"检查点写入失败:{:?}", e};
+                }
+            }
         }
     }
 }
@@ -157,10 +159,9 @@ mod tests {
     use rand::{Rng, SeedableRng};
     use serde::{Deserialize, Serialize};
     use serde_json::Value;
-
-    use crate::meta_client;
-    use crate::node::create_and_init;
     use tokio::sync::Semaphore;
+
+    use crate::node::create_and_init;
 
     #[derive(Serialize, Deserialize, Debug)]
     struct Event {
@@ -181,15 +182,15 @@ mod tests {
         rt.block_on(async {
             let node_bs = create_and_init().await.expect("创建node失败！");
             let dt = Local::now();
-            let semaphore =Arc::new(Semaphore::new(1000));
+            let semaphore = Arc::new(Semaphore::new(1000));
 
             for i in 0..10000000000 {
                 let node = node_bs.clone();
                 let acquire = semaphore.clone().acquire_owned().await.unwrap();
                 rt.spawn(async move {
                     let mut rng = rand::rngs::StdRng::from_entropy();
-                    let user_id: i64 = rng.gen_range(1000..10010);
-                    // let user_id: i64 = 1011;
+                    // let user_id: i64 = rng.gen_range(1000..10010);
+                    let user_id: i64 = i;
                     let amount: f64 = rng.gen_range(100.0..200.0);
                     let e = Event {
                         ds: 101,
@@ -200,7 +201,8 @@ mod tests {
                     let data = serde_json::to_string(&e).expect("序列号异常！");
 
                     let v: Value = serde_json::from_str(&data).expect("xxx");
-                    info!("write result:{:?}", node.update(v).await);
+                    let res = node.update(v).await;
+                    //info!("write result:{:?}", node.update(v).await);
                     drop(acquire);
                 });
             }

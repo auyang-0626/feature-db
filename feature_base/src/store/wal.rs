@@ -1,7 +1,6 @@
-
-use std::convert::{ TryFrom};
-
-use std::io::Cursor;
+use std::convert::TryFrom;
+use std::fmt::Debug;
+use std::io::{Cursor, Error};
 use std::option::Option::Some;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -14,27 +13,11 @@ use tokio::io::AsyncWriteExt;
 use tokio::sync::{mpsc, Mutex, oneshot, RwLock};
 use tokio::sync::mpsc::{Receiver, Sender};
 
-
-use crate::custom_error::{common_err, CustomResult, decode_failed_by_insufficient_data_err};
+use crate::custom_error::{ CustomResult, decode_failed_by_insufficient_data_err};
 use crate::feature::value::ValueKind;
 use crate::store::Storable;
-use std::fmt::Debug;
 
 pub type Callback = oneshot::Sender<u64>;
-
-impl Storable for Callback {
-    fn encode(&self, buf: &mut BytesMut) -> CustomResult<()> {
-        Ok(())
-    }
-
-    fn decode(buf: &mut Cursor<&[u8]>) -> CustomResult<Self> where Self: Sized {
-        Err(common_err(format!("Callback 不支持decode")))
-    }
-
-    fn need_space(&self) -> usize {
-        0
-    }
-}
 
 pub fn get_wal_file_path(data_dir: String) -> String {
     format!("{}/redo.log", data_dir)
@@ -62,7 +45,7 @@ pub struct Wal {
 }
 
 impl Wal {
-    pub async fn send_log(&self, tid: u64, kind: WalLogKind, value: Option<Box<dyn Storable>>,callback:Option<Callback>) -> CustomResult<u64> {
+    pub async fn send_log(&self, tid: u64, kind: WalLogKind, value: Option<Box<dyn Storable>>, callback: Option<Callback>) -> CustomResult<u64> {
         let send = self.send.lock().await;
         let action_id = generate_action_id();
         send.send(WalLogItem {
@@ -70,26 +53,34 @@ impl Wal {
             kind,
             action_id,
             value,
-            callback
+            callback,
         }).await?;
 
         Ok(action_id)
     }
 
     pub async fn send_begin_log(&self, tid: u64) -> CustomResult<u64> {
-        self.send_log(tid, WalLogKind::Begin, None,None).await
+        self.send_log(tid, WalLogKind::Begin, None, None).await
     }
 
     pub async fn send_feature_update_log(&self, tid: u64, value: WalFeatureUpdateValue) -> CustomResult<u64> {
-        self.send_log(tid, WalLogKind::FeatureUpdate, Some(Box::new(value)),None).await
+        self.send_log(tid, WalLogKind::FeatureUpdate, Some(Box::new(value)), None).await
+    }
+
+    pub async fn send_page_index_store_log(&self, tid: u64, value: WalPageIndexStoreValue) -> CustomResult<u64> {
+        self.send_log(tid, WalLogKind::PageIndexStore, Some(Box::new(value)), None).await
+    }
+
+    pub async fn send_page_bk_store_log(&self, tid: u64, value: WalPageBkStoreValue) -> CustomResult<u64> {
+        self.send_log(tid, WalLogKind::PageIndexStore, Some(Box::new(value)), None).await
     }
 
     pub async fn commit_log(&self, tid: u64) -> CustomResult<()> {
         let (tx, rx) = oneshot::channel();
-        let action_id = self.send_log(tid, WalLogKind::Commit,  None,Some(tx)).await?;
+        let action_id = self.send_log(tid, WalLogKind::Commit, None, Some(tx)).await?;
 
         let tid: u64 = rx.await?;
-        info!("commit_log:{}", tid);
+        //info!("commit_log:{}", tid);
         Ok(())
     }
 
@@ -103,10 +94,15 @@ impl Wal {
                     let mut buf = BytesMut::new();
                     match message.encode(&mut buf) {
                         Ok(_) => {
-                            f.write_buf(&mut buf).await;
+                           match  f.write_buf(&mut buf).await{
+                               Ok(_) => {}
+                               Err(e) => {
+                                   warn!("wal写入失败!,{:?}",e);
+                               }
+                           }
                         }
                         Err(e) => {
-                            warn!("序列化失败:{:?}", message);
+                            warn!("序列化失败:{:?},{:?}", message,e);
                         }
                     }
                     // if message.action_id % 100 == 0 {
@@ -117,7 +113,6 @@ impl Wal {
 
                     if let Some(callback) = message.callback {
                         callback.send(message.tid);
-                        info!("send callback :{:?}", message.tid);
                     }
                 } else {
                     info!("recv none");
@@ -155,7 +150,7 @@ pub async fn crate_wal(data_dir: String) -> CustomResult<Wal> {
 
 
 #[repr(u8)]
-#[derive(Debug, TryFromPrimitive, IntoPrimitive, Clone,PartialEq)]
+#[derive(Debug, TryFromPrimitive, IntoPrimitive, Clone, PartialEq)]
 pub enum WalLogKind {
     Begin = 1,
     Commit = 2,
@@ -164,12 +159,14 @@ pub enum WalLogKind {
     // 指标更新
     FeatureUpdate = 4,
 
-    // 申请page
-    PageNew = 5,
+    // page备份写入
+    PageBkStore = 5,
     // page刷盘到缓存文件
     PageBufferSync = 6,
     // page刷盘到数据文件
     PageSync = 7,
+
+    PageIndexStore = 8,
 }
 
 #[derive(Debug)]
@@ -178,7 +175,7 @@ pub struct WalLogItem {
     pub kind: WalLogKind,
     pub action_id: u64,
     pub value: Option<Box<dyn Storable>>,
-    pub callback:Option<Callback>
+    pub callback: Option<Callback>,
 }
 
 impl Storable for WalLogItem {
@@ -203,7 +200,6 @@ impl Storable for WalLogItem {
             return Err(decode_failed_by_insufficient_data_err());
         }
         let item_len = buf.get_u32();
-        info!("item_len:{},buf.len:{}", item_len, buf.remaining());
         if buf.remaining() < item_len as usize {
             return Err(decode_failed_by_insufficient_data_err());
         }
@@ -221,7 +217,7 @@ impl Storable for WalLogItem {
             kind,
             action_id,
             value,
-            callback:None,
+            callback: None,
         })
     }
 
@@ -290,4 +286,65 @@ impl Storable for WalFeatureUpdateValue {
     }
 }
 
+#[derive(Debug)]
+pub struct WalPageIndexStoreValue {
+    pub slot_id: u16,
+}
 
+impl WalPageIndexStoreValue {
+    pub fn new(slot_id: u16) -> WalPageIndexStoreValue {
+        WalPageIndexStoreValue { slot_id: slot_id }
+    }
+}
+
+impl Storable for WalPageIndexStoreValue {
+    fn encode(&self, buf: &mut BytesMut) -> CustomResult<()> {
+        buf.put_u16(self.slot_id);
+        Ok(())
+    }
+
+    fn decode(buf: &mut Cursor<&[u8]>) -> CustomResult<Self> where Self: Sized {
+        let slot_id = buf.get_u16();
+        Ok(WalPageIndexStoreValue::new(slot_id))
+    }
+
+    fn need_space(&self) -> usize {
+        2
+    }
+}
+
+#[derive(Debug)]
+pub struct WalPageBkStoreValue {
+    pub slot_id: u16,
+    pub page_id: u64,
+    pub min_pk: u64,
+    pub max_pk: u64,
+}
+
+impl Storable for WalPageBkStoreValue {
+    fn encode(&self, buf: &mut BytesMut) -> CustomResult<()> {
+        buf.put_u16(self.slot_id);
+        buf.put_u64(self.page_id);
+        buf.put_u64(self.min_pk);
+        buf.put_u64(self.max_pk);
+
+        Ok(())
+    }
+
+    fn decode(buf: &mut Cursor<&[u8]>) -> CustomResult<Self> where Self: Sized {
+        let slot_id = buf.get_u16();
+        let page_id = buf.get_u64();
+        let min_pk = buf.get_u64();
+        let max_pk = buf.get_u64();
+        Ok(WalPageBkStoreValue {
+            slot_id,
+            page_id,
+            min_pk,
+            max_pk,
+        })
+    }
+
+    fn need_space(&self) -> usize {
+        2 + 8 + 8 + 8
+    }
+}

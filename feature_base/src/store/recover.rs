@@ -15,7 +15,7 @@ use crate::store::wal::{get_wal_file_path, WalLogItem};
 pub async fn recover(store: &mut Store) -> CustomResult<()> {
     // 初始化
     for (slot_id, slot) in &store.slot_index {
-        let page = slot.new_page().await?;
+        let page = slot.new_page(0,1<<64-1).await?;
         slot.page_tree.write().await
             .insert(0, Arc::new(RwLock::new(page)));
     }
@@ -27,8 +27,6 @@ pub async fn recover(store: &mut Store) -> CustomResult<()> {
         .open(wal_log_path)
         .await?;
 
-
-
     let mut buf = BytesMut::with_capacity(1024);
     let mut before_pos = 0;
     let mut pos = 0;
@@ -36,7 +34,7 @@ pub async fn recover(store: &mut Store) -> CustomResult<()> {
     loop {
         let res = {
             let mut cursor: Cursor<&[u8]> = Cursor::new(&*buf);
-            cursor.seek(SeekFrom::Start(before_pos)).await;
+            cursor.seek(SeekFrom::Start(before_pos)).await?;
             let res = WalLogItem::decode(&mut cursor);
             pos = cursor.position();
             res
@@ -68,10 +66,6 @@ pub async fn recover(store: &mut Store) -> CustomResult<()> {
 mod tests {
     use crate::config::Config;
     use crate::store::{Store};
-
-
-
-
 
 
     #[test]

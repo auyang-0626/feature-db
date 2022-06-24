@@ -54,13 +54,12 @@ impl CountFeatureTemplate {
         let time = get_value_as_u64(event, &self.time_key)?;
 
         let old_value = page.get(key).await;
-        info!("old_value:{:?}", old_value);
         //
         let update_res = match old_value {
             None => {
                 let  sv = FeatureValue::new();
                 let update_res = sv.add_int(key, time, self.window_unit.to_millis(self.window_size), 1)?;
-                page.put(key.clone(), sv).await;
+                page.put(key.clone(), sv).await?;
                 update_res
             }
             Some(sv) => {
