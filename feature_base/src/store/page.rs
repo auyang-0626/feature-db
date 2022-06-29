@@ -128,7 +128,7 @@ impl Storable for Page {
     }
 
     fn need_space(&self) -> usize {
-        let mut space = 8 + 2 + 8;
+        let mut space = 8 + 2 + 8 + 8 + 8;
         for (k, v) in &self.data {
             space = space + 2 + k.len() + v.need_space();
         }

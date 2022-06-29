@@ -20,10 +20,10 @@ const PAGE_NUM: u32 = 1 << 18;
 /// slot数量的bit表示法，即 2^12
 pub const SLOT_NUM_BY_BIT: u16 = 12;
 
-/// 页的大小
+/// 页的大小 64K
 pub const PAGE_SIZE: u32 = 1 << 16;
 
-/// 文件大小
+/// 文件大小 1G
 pub const FILE_SIZE: u32 = 1 << 30;
 
 /// 分片
@@ -95,13 +95,15 @@ impl Slot {
             buf.put_u64(v.read().await.id);
         }
 
+        let mut cp_buf = buf.clone();
+
         let mut bk_f = self.get_slot_index_path_bk().await?;
         bk_f.write_buf(&mut buf).await?;
         bk_f.sync_data().await?;
-        // 刷盘完成(写副本)
+        // 写副本,刷盘完成
         wal.send_page_index_store_log(tid, WalPageIndexStoreValue::new(self.id)).await?;
 
-        let mut cp_buf = buf.clone();
+
         let mut f = self.get_slot_index_path().await?;
         f.write_buf(&mut cp_buf).await?;
         f.sync_data().await?;
@@ -139,7 +141,7 @@ impl Slot {
             let mut buf = BytesMut::new();
             page.encode(&mut buf)?;
             let mut buf_bk = buf.clone();
-            info!("待写入page:{},size:{}", page.id, buf.len());
+            info!("待写入page:{},size:{},need_space:{}", page.id, buf.len(), page.need_space());
 
             // 写入备份
             let mut shard_f = self.get_shard_page_store_file().await?;
@@ -222,6 +224,7 @@ impl Slot {
         let page_id = page_id as u32;
         let file_index = PAGE_SIZE * page_id / FILE_SIZE;
         let seek_pos = PAGE_SIZE * page_id % FILE_SIZE;
+        info!("page file:{},seek:{}", page_id, seek_pos);
 
         let mut page_file = OpenOptions::new()
             .read(true)

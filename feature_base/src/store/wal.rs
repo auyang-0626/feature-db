@@ -72,7 +72,7 @@ impl Wal {
     }
 
     pub async fn send_page_bk_store_log(&self, tid: u64, value: WalPageBkStoreValue) -> CustomResult<u64> {
-        self.send_log(tid, WalLogKind::PageIndexStore, Some(Box::new(value)), None).await
+        self.send_log(tid, WalLogKind::PageBkStore, Some(Box::new(value)), None).await
     }
 
     pub async fn commit_log(&self, tid: u64) -> CustomResult<()> {
@@ -161,10 +161,6 @@ pub enum WalLogKind {
 
     // page备份写入
     PageBkStore = 5,
-    // page刷盘到缓存文件
-    PageBufferSync = 6,
-    // page刷盘到数据文件
-    PageSync = 7,
 
     PageIndexStore = 8,
 }
@@ -209,6 +205,12 @@ impl Storable for WalLogItem {
         let value: Option<Box<dyn Storable>> = match kind {
             WalLogKind::FeatureUpdate => {
                 Some(Box::new(WalFeatureUpdateValue::decode(buf)?))
+            }
+            WalLogKind::PageIndexStore => {
+                Some(Box::new(WalPageIndexStoreValue::decode(buf)?))
+            }
+            WalLogKind::PageBkStore => {
+                Some(Box::new(WalPageBkStoreValue::decode(buf)?))
             }
             _ => None
         };
